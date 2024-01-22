@@ -1,21 +1,62 @@
 /** @format */
 "use client";
+
+// dropzone
+import { useDropzone, FileRejection, FileWithPath } from "react-dropzone";
+
+// dropzone  end
 import React, { useState } from "react";
 
 import { useAutoAnimate } from "@formkit/auto-animate/react";
+import SingleTodo from "./SingleTodo";
+import { cn } from "@/utils";
 
 type Props = {};
 
+export type TodoType = {
+  id: number;
+  text: string;
+  isCompleted: boolean;
+};
+
 export default function TodoApp({}: Props) {
+  // dropzone
+  const { getRootProps, getInputProps } = useDropzone({
+    onDrop: (acceptedFiles: FileWithPath[]) => handleFileDrop(acceptedFiles)
+  });
+
+  const handleFileDrop = (files: File[]) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+
+      // Assuming the content of the text file is a newline-separated list of todos
+      const newTodos = content.split("\n").map((text, index) => ({
+        id: index + 1,
+        text: text.trim(),
+        isCompleted: false
+      }));
+
+      setTodos((prevTodos) => [...prevTodos, ...newTodos]);
+    };
+
+    if (files.length > 0) {
+      reader.readAsText(files[0]);
+    }
+  };
+
+  // dropzone end **
+
   const [animationParent] = useAutoAnimate();
-  const [todos, setTodos] = useState([
-    { id: 1, text: "Todo 1" },
-    { id: 2, text: "Todo 2" },
-    { id: 3, text: "Todo 3" }
+  const [todos, setTodos] = useState<TodoType[]>([
+    { id: 1, text: "Todo 1", isCompleted: false },
+    { id: 2, text: "Todo 2", isCompleted: false },
+    { id: 3, text: "Todo 3", isCompleted: false }
   ]);
   const [inputText, setInputText] = useState("");
-  const [editeMode, setEditeMode] = useState<number | null>(null);
-  const [editedText, setEditedText] = useState("");
+  const [editeModeId, setEditeIdMode] = useState<number | null>(null);
+  const [textValue, setTextValue] = useState("");
 
   function addTodo() {
     if (inputText.trim() !== "") {
@@ -26,9 +67,10 @@ export default function TodoApp({}: Props) {
         setInputText("");
         return;
       }
-      const newTodo = {
+      const newTodo: TodoType = {
         id: todos.length + 1,
-        text: inputText
+        text: inputText,
+        isCompleted: false
       };
 
       setTodos([...todos, newTodo]);
@@ -43,25 +85,47 @@ export default function TodoApp({}: Props) {
   }
 
   function editTodo(id: number) {
-    setEditeMode(id);
+    setEditeIdMode(id);
 
     const todoToEdit = todos.find((todo) => todo.id == id);
     if (todoToEdit) {
-      setEditedText(todoToEdit.text);
+      setTextValue(todoToEdit.text);
     }
   }
 
   function saveEditedTodo() {
     const updatedTodos = todos.map((todo) =>
-      todo.id === editeMode ? { ...todo, text: editedText } : todo
+      todo.id === editeModeId ? { ...todo, text: textValue } : todo
     );
 
     setTodos(updatedTodos);
-    setEditeMode(null);
+    setEditeIdMode(null);
   }
 
+  //  handle compolete todo or not
+  function handleIsTodoCompeted(task: TodoType) {
+    const updatedTodos = todos.map((d) => {
+      console.log("circle clicked");
+      if (task == d) {
+        return { ...d, isCompleted: !d.isCompleted };
+      }
+      return d;
+    });
+
+    setTodos(updatedTodos);
+  }
+  console.log("todos-", todos);
+
+  function clearCompletedTodos() {
+    const updatedTodos = todos.filter((todo) => !todo.isCompleted);
+    setTodos(updatedTodos);
+  }
+
+  const unCheckedTodos = todos.filter((d) => !d.isCompleted);
+  const checkedTodos = todos.filter((d) => d.isCompleted);
+
   return (
-    <div className="container mx-auto max-w-md p-4">
+    <div className="container mx-auto max-w-md p-4 flex flex-col gap-3">
       <h2 className="text-2xl font-bold mb-4">Todo App</h2>
       <div className="flex mb-4">
         <input
@@ -79,51 +143,40 @@ export default function TodoApp({}: Props) {
         </button>
       </div>
       <ul ref={animationParent}>
-        {todos.map((todo) => (
-          <li
-            key={todo.id}
-            className="flex items-center justify-between border-b py-2"
-          >
-            {editeMode === todo.id ? (
-              <>
-                <input
-                  onChange={(e) => setEditedText(e.target.value)}
-                  value={editedText}
-                  type="text"
-                  className="border-gray-300 border rounded-l px-4 py-2 w-full "
-                />
-                <button
-                  onClick={saveEditedTodo}
-                  className="bg-green-500 text-white px-4 py-2 rounded-r"
-                >
-                  Save
-                </button>
-              </>
-            ) : (
-              <>
-                {/* todd, edite btn, delete btn */}
-                <span>{todo.text} </span>
-
-                <div>
-                  <button
-                    onClick={() => editTodo(todo.id)}
-                    className=" text-yellow-500 mr-2"
-                  >
-                    {" "}
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => deleteTodo(todo.id)}
-                    className=" text-red-500 "
-                  >
-                    Delete
-                  </button>
-                </div>
-              </>
-            )}
-          </li>
+        {todos.map((todo, i) => (
+          <SingleTodo
+            className={cn({ "border-none": todos.length - 1 === i })}
+            handleIsTodoCompeted={() => handleIsTodoCompeted(todo)}
+            deleteTodo={() => deleteTodo(todo.id)}
+            editTodo={() => editTodo(todo.id)}
+            editeModeId={editeModeId}
+            saveEditedTodo={saveEditedTodo}
+            setTextValue={setTextValue}
+            textValue={textValue}
+            todo={todo}
+            key={i}
+          />
         ))}
       </ul>
+      {checkedTodos.length > 0 && (
+        <button
+          onClick={clearCompletedTodos}
+          className="bg-red-500 text-white px-4 py-2 mt-4"
+        >
+          Clear Completed Todos
+        </button>
+      )}
+      {/* drop zone
+       */}
+      <div
+        {...getRootProps()}
+        className="dropzone cursor-grab border-dashed border-2 border-gray-300 p-6 text-center"
+      >
+        <input {...getInputProps()} />
+        <p className="text-gray-600">
+          {` Drag 'n' drop a text file with todos here, or click to select a file`}
+        </p>
+      </div>
     </div>
   );
 }
